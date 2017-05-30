@@ -12,10 +12,6 @@
 #include <fstream>
 #include <cstring>
 
-#include <iostream>
-#include <iomanip>
-#include <string>
-
 namespace GOST {;
 
 static const u32 defaultSBox[4][256] =
@@ -166,7 +162,7 @@ static const uint cryptRounds[32] =
 static const uint C1 = 0x1010104;
 static const uint C2 = 0x1010101;
 
-inline static void bytesToU32(u32& dst, const byte* scr)
+inline static void bytesToU32(u32 &dst, const byte *scr)
 {
     dst |= scr[0];
     dst |= scr[1] << 8;
@@ -174,18 +170,16 @@ inline static void bytesToU32(u32& dst, const byte* scr)
     dst |= scr[3] << 24;
 }
 
-void Crypter::splitKey(const byte* password)
+void Crypter::splitKey(const byte *password)
 {
-	memset(X, 0, sizeof(X));
+	wipememory(X, sizeof(X));
 
-    bytesToU32(X[0], password);
-    bytesToU32(X[1], password+4);
-    bytesToU32(X[2], password+8);
-    bytesToU32(X[3], password+12);
-    bytesToU32(X[4], password+16);
-    bytesToU32(X[5], password+20);
-    bytesToU32(X[6], password+24);
-    bytesToU32(X[7], password+28);
+	const byte *p = password;
+
+	for (u8 i = 0; i < 8; ++i) {
+		bytesToU32(X[i], p);
+		p += 4;
+	}
 }
 
 // INTERFACE FUNCTIONS
@@ -221,7 +215,7 @@ void Crypter::setTable(const char* filename)
 
 // 128 bytes representing SBox table for GOST encryption
 // this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
-void Crypter::setTable(const byte* table)
+void Crypter::setTable(const byte *table)
 {
 	u8(*raw_sbox)[16] = (u8(*)[16])table;
 
@@ -241,23 +235,23 @@ void Crypter::useDefaultSync()
 
 void Crypter::setSync(const u64 sync)
 {
-	Sync[0] = (uint)sync;
-	Sync[1] = (uint)(sync>>32);
+	Sync[0] = (u32)sync;
+	Sync[1] = (u32)(sync>>32);
 }
 
-void Crypter::cryptString(byte* dst, const char* scr, const byte* password)
+void Crypter::cryptString(byte *dst, const char *scr, const byte *password)
 {
-    cryptData(dst, (byte*)scr, strlen(scr), password);
+    cryptData(dst, (byte *)scr, strlen(scr), password);
 }
 
-void Crypter::decryptString(char* dst, const byte* scr, uint size, const byte* password)
+void Crypter::decryptString(char *dst, const byte *scr, uint size, const byte *password)
 {
-    cryptData((byte*)dst, (byte*)scr, size, password);
+    cryptData((byte *)dst, (byte *)scr, size, password);
     dst[size] = '\0';
 }
 
 // INTERNAL FUNCTIONS
-void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte* password)
+void Crypter::cryptData(byte *dst, const byte *scr, const uint size, const byte *password)
 {
     if(size == 0) {
         return;
@@ -338,7 +332,7 @@ void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte*
         }
     }
 
-    memset(X, 0, sizeof(X));
+	wipememory(X, sizeof(X));
 }
 
 
@@ -356,7 +350,40 @@ void Crypter::simpleGOST(u32 &A, u32 &B)
 		B ^= f(A + X[cryptRounds[i]], SBox);
 		A ^= f(B + X[cryptRounds[i+1]], SBox);
 	}
-
+	/*
+	B ^= f(A + X[0], SBox);
+	A ^= f(B + X[1], SBox);
+	B ^= f(A + X[2], SBox);
+	A ^= f(B + X[3], SBox);
+	B ^= f(A + X[4], SBox);
+	A ^= f(B + X[5], SBox);
+	B ^= f(A + X[6], SBox);
+	A ^= f(B + X[7], SBox);
+	B ^= f(A + X[0], SBox);
+	A ^= f(B + X[1], SBox);
+	B ^= f(A + X[2], SBox);
+	A ^= f(B + X[3], SBox);
+	B ^= f(A + X[4], SBox);
+	A ^= f(B + X[5], SBox);
+	B ^= f(A + X[6], SBox);
+	A ^= f(B + X[7], SBox);
+	B ^= f(A + X[0], SBox);
+	A ^= f(B + X[1], SBox);
+	B ^= f(A + X[2], SBox);
+	A ^= f(B + X[3], SBox);
+	B ^= f(A + X[4], SBox);
+	A ^= f(B + X[5], SBox);
+	B ^= f(A + X[6], SBox);
+	A ^= f(B + X[7], SBox);
+	B ^= f(A + X[7], SBox);
+	A ^= f(B + X[6], SBox);
+	B ^= f(A + X[5], SBox);
+	A ^= f(B + X[4], SBox);
+	B ^= f(A + X[3], SBox);
+	A ^= f(B + X[2], SBox);
+	B ^= f(A + X[1], SBox);
+	A ^= f(B + X[0], SBox);
+	*/
 	std::swap(B, A);
 }
 
