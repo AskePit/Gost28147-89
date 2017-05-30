@@ -17,12 +17,9 @@ namespace GOST
 {
 	class Crypter
 	{
-	private:
-		u32 SBox[4][256]; // this is an internal [4][256] representation of a standart [8][16] GOST table
-		uint Sync[2];
-		
 	public:
 		Crypter();
+		~Crypter();
 
 		void cryptData(byte* dst, const byte* scr, const uint size, const byte* password);
 		void cryptString(byte* dst, const char* scr, const byte* password);
@@ -36,7 +33,12 @@ namespace GOST
 		void setSync(const u64 sync);
 
 	private:
-		void simpleGOST(uint& A, uint& B);
+		u32 SBox[4][256]; // this is an internal [4][256] representation of a standart [8][16] GOST table
+		u32 Sync[2];
+		u32 X[8]; // splitted key
+
+		void simpleGOST(u32 &A, u32 &B);
+		void splitKey(const byte* password);
 	};
 }
 

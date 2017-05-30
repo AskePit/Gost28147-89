@@ -16,8 +16,8 @@
 #include <iomanip>
 #include <string>
 
-namespace GOST
-{
+namespace GOST {;
+
 static const uint defaultSBox[4][256] =
 {
     {0x6c,0x64,0x66,0x62,0x6a,0x65,0x6b,0x69,0x6e,0x68,0x6d,0x67,0x60,0x63,0x6f,0x61,0x8c,0x84,0x86,0x82,0x8a,0x85,0x8b,0x89,0x8e,0x88,0x8d,0x87,0x80,0x83,0x8f,0x81,0x2c,0x24,0x26,0x22,0x2a,0x25,0x2b,0x29,0x2e,0x28,0x2d,0x27,0x20,0x23,0x2f,0x21,0x3c,0x34,0x36,0x32,0x3a,0x35,0x3b,0x39,0x3e,0x38,0x3d,0x37,0x30,0x33,0x3f,0x31,0x9c,0x94,0x96,0x92,0x9a,0x95,0x9b,0x99,0x9e,0x98,0x9d,0x97,0x90,0x93,0x9f,0x91,0xac,0xa4,0xa6,0xa2,0xaa,0xa5,0xab,0xa9,0xae,0xa8,0xad,0xa7,0xa0,0xa3,0xaf,0xa1,0x5c,0x54,0x56,0x52,0x5a,0x55,0x5b,0x59,0x5e,0x58,0x5d,0x57,0x50,0x53,0x5f,0x51,0xcc,0xc4,0xc6,0xc2,0xca,0xc5,0xcb,0xc9,0xce,0xc8,0xcd,0xc7,0xc0,0xc3,0xcf,0xc1,0x1c,0x14,0x16,0x12,0x1a,0x15,0x1b,0x19,0x1e,0x18,0x1d,0x17,0x10,0x13,0x1f,0x11,0xec,0xe4,0xe6,0xe2,0xea,0xe5,0xeb,0xe9,0xee,0xe8,0xed,0xe7,0xe0,0xe3,0xef,0xe1,0x4c,0x44,0x46,0x42,0x4a,0x45,0x4b,0x49,0x4e,0x48,0x4d,0x47,0x40,0x43,0x4f,0x41,0x7c,0x74,0x76,0x72,0x7a,0x75,0x7b,0x79,0x7e,0x78,0x7d,0x77,0x70,0x73,0x7f,0x71,0xbc,0xb4,0xb6,0xb2,0xba,0xb5,0xbb,0xb9,0xbe,0xb8,0xbd,0xb7,0xb0,0xb3,0xbf,0xb1,0xdc,0xd4,0xd6,0xd2,0xda,0xd5,0xdb,0xd9,0xde,0xd8,0xdd,0xd7,0xd0,0xd3,0xdf,0xd1,0xc,0x4,0x6,0x2,0xa,0x5,0xb,0x9,0xe,0x8,0xd,0x7,0x0,0x3,0xf,0x1,0xfc,0xf4,0xf6,0xf2,0xfa,0xf5,0xfb,0xf9,0xfe,0xf8,0xfd,0xf7,0xf0,0xf3,0xff,0xf1,},
@@ -37,9 +37,7 @@ static const uint cryptRounds[32] =
 static const uint C1 = 0x1010104;
 static const uint C2 = 0x1010101;
 
-static uint X[8];			// splitted key
-
-inline static void bytesToU32(uint& dst, const byte* scr)
+inline static void bytesToU32(u32& dst, const byte* scr)
 {
     dst |= scr[0];
     dst |= scr[1] << 8;
@@ -47,16 +45,10 @@ inline static void bytesToU32(uint& dst, const byte* scr)
     dst |= scr[3] << 24;
 }
 
-inline static void u32ToBytes(char* dst, const uint scr)
+void Crypter::splitKey(const byte* password)
 {
-    dst[0] = scr;
-    dst[1] = scr >> 8;
-    dst[2] = scr >> 16;
-    dst[3] = scr >> 24;
-}
+	memset(X, 0, sizeof(X));
 
-inline static void splitKey(const byte* password)
-{
     bytesToU32(X[0], password);
     bytesToU32(X[1], password+4);
     bytesToU32(X[2], password+8);
@@ -72,6 +64,10 @@ Crypter::Crypter()
 {
     useDefaultTable();
     useDefaultSync();
+}
+
+Crypter::~Crypter()
+{
 }
 
 void Crypter::useDefaultTable()
@@ -94,77 +90,30 @@ void Crypter::setTable(const char* filename)
     setTable(table);
 }
 
-/*
-// 128 bytes representing SBox table for GOST encryption
-// this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
-void Crypter::setTable(const byte* table)
-{
-    byte* cursor = &SBox[0][0];
-
-    for(uint i = 0; i<4; ++i) {
-        for(uint j = 0; j<16; ++j) {
-            for(uint k = 0; k<16; ++k) {
-                *cursor = (table[i*2*16 + k]<<0) + ((table[i*2*16 + 16 + j])<<4);
-                ++cursor;
-            }
-        }
-    }
-}
-*/
-
-void printSBox(u32 sbox_x[4][256])
-{
-	for (int i = 0; i < 4 * 256; ++i) {
-		if (i % 8 == 0) {
-			printf("\n");
-		}
-		printf("%08x ", ((u32*)sbox_x)[i]);
-	}
-	printf("\n\n");
-}
-
-void printRawSBox(u8 sbox_x[8][16])
-{
-	for (int i = 0; i < 8 * 16; ++i) {
-		if (i % 8 == 0) {
-			printf("\n");
-		}
-		printf("%02x ", ((u8*)sbox_x)[i]);
-	}
-	printf("\n\n");
-}
-
 // 128 bytes representing SBox table for GOST encryption
 // this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
 void Crypter::setTable(const byte* table)
 {
 	u8(*raw_sbox)[16] = (u8(*)[16])table;
-	//printRawSBox(raw_sbox);
 
-	u8 i;
-	u8 j;
-	u16 k;
-
-	for (i = 0, j = 0; i < 4; i++, j += 2) {
-		for (k = 0; k < 256; k++) {
+	for (u8 i = 0, j = 0; i < 4; i++, j += 2) {
+		for (u16 k = 0; k < 256; k++) {
 			SBox[i][k] = (raw_sbox[j][k & 0x0f] | raw_sbox[j + 1][k >> 4] << 4) << (j * 4);
 			SBox[i][k] = SBox[i][k] << 11 | SBox[i][k] >> (32 - 11);
 		}
 	}
-
-	//printSBox(SBox);
 }
 
 void Crypter::useDefaultSync()
 {
-    Sync[0] = 0x40FD452C;
-    Sync[1] = 0xF86EDCDB;
+	Sync[0] = 0x40FD452C;
+	Sync[1] = 0xF86EDCDB;
 }
 
 void Crypter::setSync(const u64 sync)
 {
-    Sync[0] = (uint)sync;
-    Sync[1] = (uint)(sync>>32);
+	Sync[0] = (uint)sync;
+	Sync[1] = (uint)(sync>>32);
 }
 
 void Crypter::cryptString(byte* dst, const char* scr, const byte* password)
@@ -178,17 +127,6 @@ void Crypter::decryptString(char* dst, const byte* scr, uint size, const byte* p
     dst[size] = '\0';
 }
 
-inline static void print(const std::string &note) {
-	using namespace std;
-	cout << endl << note << endl;
-}
-
-inline static void _print32(const std::string &label, u32 val) {
-	using namespace std;
-	cout << label << ": " << hex << setw(8) << setfill('0') << val << endl;
-}
-#define print32(X) _print32(#X, X)
-
 // INTERNAL FUNCTIONS
 void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte* password)
 {
@@ -196,26 +134,12 @@ void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte*
         return;
     }
 
-	//print(std::to_string(size));
-
     register uint N1 = Sync[0];
     register uint N2 = Sync[1];
 
-	
-	/*print("Sync:");
-	print32(N1);
-	print32(N2);*/
-	
+	splitKey(password);
 
-    splitKey(password);
-
-    simpleGOST(N1, N2);
-
-	
-	/*print("Crypted Sync:");
-	print32(N1);
-	print32(N2);*/
-	
+	simpleGOST(N1, N2);
 
     uint remain = size%8;
     const byte* scrEnd = scr + size;
@@ -237,19 +161,7 @@ void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte*
         G1 = N1 = N1 + C2;
         G2 = N2 = A.val;
 
-		/*
-		print("Plain Gamma:");
-		print32(G1);
-		print32(G2);
-		*/
-
-        simpleGOST(G1, G2);
-
-		/*
-		print("Gamma:");
-		print32(G1);
-		print32(G2);
-		*/
+		simpleGOST(G1, G2);
 
         memcpy(A.blob, scr, 4);
         scr += 4;
@@ -257,20 +169,8 @@ void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte*
         memcpy(B.blob, scr, 4);
         scr += 4;
 
-		/*
-		print("Text:");
-		print32(A.val);
-		print32(B.val);
-		*/
-
         A.val ^= G1;   // gamming
         B.val ^= G2;
-
-		/*
-		print("Crypted Text:");
-		print32(A.val);
-		print32(B.val);
-		*/
 
         if(scr <= scrEnd)			// file doesn't end
         {
@@ -321,58 +221,15 @@ u32 f(u32 word, u32 sBox[4][256])
 		   sBox[0][(word & 0x000000ff)];
 }
 
-void swap32(u32 &a, u32 &b)
+void Crypter::simpleGOST(u32 &A, u32 &B)
 {
-	u32 tmp = a;
-
-	a = b;
-	b = tmp;
-}
-
-void Crypter::simpleGOST(uint &A, uint &B)
-{
-	u8 i;
-
-	for (i = 0; i < 31; i += 2) {
+	for (u8 i = 0; i < 31; i += 2) {
 		B ^= f(A + X[cryptRounds[i]], SBox);
 		A ^= f(B + X[cryptRounds[i+1]], SBox);
 	}
 
-	swap32(B, A);
+	std::swap(B, A);
 }
-
-/*
-void Crypter::simpleGOST(uint& A, uint& B)
-{
-    union
-    {
-        uint val;
-        byte blob[4];
-    } T;
-
-    for(uint i = 0; i<32; ++i)
-    {
-        T.val = A + X[cryptRounds[i]];
-
-        T.val =
-            SBox[0][T.blob[0]]     |
-            SBox[1][T.blob[1]]<< 8 |
-            SBox[2][T.blob[2]]<<16 |
-            SBox[3][T.blob[3]]<<24;
-
-        T.val = (T.val<<11)|(T.val>>21);
-        T.val = T.val^B;
-
-        if(i != 31)
-        {
-            B = A;
-            A = T.val;
-        }
-        else
-            B = T.val;
-    }
-}
-*/
 
 }
 
