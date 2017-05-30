@@ -57,7 +57,7 @@ int main()
 
 	bool pass = true;
 
-	for (int i = 0; i < 500; ++i)
+	for (int i = 0; i < 1000; ++i)
 	for (const auto test : getTests()) {
 		pass &= run_test(test);
 	}
@@ -65,7 +65,7 @@ int main()
 	print_result(pass);
 	std::cout << float(clock() - begin_time) << " ms" << std::endl;
 
-	//267 ms
+	//new: 520 ms
 
     return 0;
 }

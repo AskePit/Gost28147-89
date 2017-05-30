@@ -94,6 +94,7 @@ void Crypter::setTable(const char* filename)
     setTable(table);
 }
 
+/*
 // 128 bytes representing SBox table for GOST encryption
 // this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
 void Crypter::setTable(const byte* table)
@@ -108,6 +109,50 @@ void Crypter::setTable(const byte* table)
             }
         }
     }
+}
+*/
+
+void printSBox(u32 sbox_x[4][256])
+{
+	for (int i = 0; i < 4 * 256; ++i) {
+		if (i % 8 == 0) {
+			printf("\n");
+		}
+		printf("%08x ", ((u32*)sbox_x)[i]);
+	}
+	printf("\n\n");
+}
+
+void printRawSBox(u8 sbox_x[8][16])
+{
+	for (int i = 0; i < 8 * 16; ++i) {
+		if (i % 8 == 0) {
+			printf("\n");
+		}
+		printf("%02x ", ((u8*)sbox_x)[i]);
+	}
+	printf("\n\n");
+}
+
+// 128 bytes representing SBox table for GOST encryption
+// this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
+void Crypter::setTable(const byte* table)
+{
+	u8(*raw_sbox)[16] = (u8(*)[16])table;
+	//printRawSBox(raw_sbox);
+
+	u8 i;
+	u8 j;
+	u16 k;
+
+	for (i = 0, j = 0; i < 4; i++, j += 2) {
+		for (k = 0; k < 256; k++) {
+			SBox[i][k] = (raw_sbox[j][k & 0x0f] | raw_sbox[j + 1][k >> 4] << 4) << (j * 4);
+			SBox[i][k] = SBox[i][k] << 11 | SBox[i][k] >> (32 - 11);
+		}
+	}
+
+	//printSBox(SBox);
 }
 
 void Crypter::useDefaultSync()
@@ -156,21 +201,21 @@ void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte*
     register uint N1 = Sync[0];
     register uint N2 = Sync[1];
 
-	/*
-	print("Sync:");
+	
+	/*print("Sync:");
 	print32(N1);
-	print32(N2);
-	*/
+	print32(N2);*/
+	
 
     splitKey(password);
 
     simpleGOST(N1, N2);
 
-	/*
-	print("Crypted Sync:");
+	
+	/*print("Crypted Sync:");
 	print32(N1);
-	print32(N2);
-	*/
+	print32(N2);*/
+	
 
     uint remain = size%8;
     const byte* scrEnd = scr + size;
@@ -267,6 +312,36 @@ void Crypter::cryptData(byte* dst, const byte* scr, const uint size, const byte*
     memset(X, 0, sizeof(X));
 }
 
+
+u32 f(u32 word, u32 sBox[4][256])
+{
+	return sBox[3][word >> 24] ^
+		   sBox[2][(word & 0x00ff0000) >> 16] ^
+		   sBox[1][(word & 0x0000ff00) >> 8] ^
+		   sBox[0][(word & 0x000000ff)];
+}
+
+void swap32(u32 &a, u32 &b)
+{
+	u32 tmp = a;
+
+	a = b;
+	b = tmp;
+}
+
+void Crypter::simpleGOST(uint &A, uint &B)
+{
+	u8 i;
+
+	for (i = 0; i < 31; i += 2) {
+		B ^= f(A + X[cryptRounds[i]], SBox);
+		A ^= f(B + X[cryptRounds[i+1]], SBox);
+	}
+
+	swap32(B, A);
+}
+
+/*
 void Crypter::simpleGOST(uint& A, uint& B)
 {
     union
@@ -297,5 +372,7 @@ void Crypter::simpleGOST(uint& A, uint& B)
             B = T.val;
     }
 }
+*/
+
 }
 

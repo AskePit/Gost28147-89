@@ -18,7 +18,7 @@ namespace GOST
 	class Crypter
 	{
 	private:
-		byte SBox[4][256]; // this is an internal [4][256] representation of a standart [8][16] GOST table
+		u32 SBox[4][256]; // this is an internal [4][256] representation of a standart [8][16] GOST table
 		uint Sync[2];
 		
 	public:
