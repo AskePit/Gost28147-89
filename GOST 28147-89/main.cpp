@@ -74,6 +74,7 @@ int main()
 	std::cout << speed << " Mb/s" << std::endl;
 
 	//new: 520 ms
+	//     213 ms
 
     return 0;
 }

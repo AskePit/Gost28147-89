@@ -37,13 +37,10 @@ namespace GOST
 		u32 Sync[2];
 		u32 X[8]; // splitted key
 
-		// Gamma
-		u32 N1, N2, N3, N4;
-		void initGamma();
-		void genGamma();
-
 		void simpleGOST(u32 &A, u32 &B);
 		u32 f(u32 word);
+
+		void genGamma(u32 &N1, u32 &N2, u32 &N3, u32 &N4);
 	};
 }
 

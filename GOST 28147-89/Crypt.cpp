@@ -223,36 +223,21 @@ void Crypter::decryptString(char *dst, const byte *scr, size_t size, const byte 
 static const uint C1 = 0x1010104;
 static const uint C2 = 0x1010101;
 
-void Crypter::initGamma()
-{
-	N1 = Sync[0];
-	N2 = Sync[1];
-
-	simpleGOST(N1, N2);
-
-	N3 = N1;
-	N4 = N2;
+inline u32 addMod32_1(u32 x, u32 y) {
+	u32 sum = x + y;
+	sum += (sum < x) | (sum < y);
+	return sum;
 }
 
-void Crypter::genGamma()
+void Crypter::genGamma(u32 &N1, u32 &N2, u32 &N3, u32 &N4)
 {
-	u32 temp;
-
-	// ADD C1 (mod 2^32 - 1)
-	temp = N4 + C1;
-	if (temp <= N4)
-		++temp;
-
-	// ADD C2 (mod 2^32)
-	N3 += C2;
-
-	N1 = N3;
-	N2 = N4 = temp;
-
+	N2 = N4 = addMod32_1(N4, C1);
+	N1 = N3 = N3 + C2;
+	
 	simpleGOST(N1, N2);
 }
 
-void Crypter::cryptData(byte *dst, const byte *scr, size_t size, const byte *password)
+void Crypter::cryptData(byte *dst, const byte *src, size_t size, const byte *password)
 {
     if(size == 0) {
         return;
@@ -260,74 +245,38 @@ void Crypter::cryptData(byte *dst, const byte *scr, size_t size, const byte *pas
 
 	memcpy(X, password, 32);
 
-	initGamma();
+    size_t remain = size%8;
+	if (remain == 0) {
+		remain = 8;
+	}
 
-    uint remain = size%8;
-    const byte* scrEnd = scr + size;
+    const byte* lastBytes = src + size - remain + 1;
 
-    register union
-    {
-        u32 val;
-        byte blob[4];
-    } A, B;
+	u32 AB[2];
+	u32 &A = AB[0];
+	u32 &B = AB[1];
 
-    register uint G1, G2;
+    register u32 N1, N2, N3, N4;
 
-    while(true)
-    {
-        A.val = N2 + C1;    // use A while it is unused for its main purpose
-        if(A.val <= N2)	// mod 2^32-1
-            ++A.val;
+	N3 = Sync[0];
+	N4 = Sync[1];
 
-        G1 = N1 = N1 + C2;
-        G2 = N2 = A.val;
+	simpleGOST(N3, N4);
 
-		simpleGOST(G1, G2);
+    while(true) {
+		genGamma(N1, N2, N3, N4);
 
-		//genGamma();
+        memcpy(&AB, src, 8);
+		src += 8;
 
-        memcpy(A.blob, scr, 4);
-        scr += 4;
+        A ^= N1;
+        B ^= N2;
 
-        memcpy(B.blob, scr, 4);
-        scr += 4;
-
-        A.val ^= G1;   // gamming
-        B.val ^= G2;
-
-        if(scr <= scrEnd)			// file doesn't end
-        {
-            memcpy(dst, A.blob, 4);
-            dst += 4;
-
-            memcpy(dst, B.blob, 4);
-            dst += 4;
-
-			if (scr == scrEnd) {
-				break;
-			}
-        }
-        else
-        {
-            uint remainA, remainB;
-
-            if(remain <= 4)
-            {
-                remainA = remain;
-                remainB = 0;
-            }
-            else
-            {
-                remainA = 4;
-                remainB = remain - 4;
-            }
-
-            memcpy(dst, A.blob, remainA);
-            dst += remainA;
-
-            memcpy(dst, B.blob, remainB);
-            dst += remainB;
-
+        if(src < lastBytes) {
+            memcpy(dst, &AB, 8);
+            dst += 8;
+        } else {
+            memcpy(dst, &AB, remain);
             break;
         }
     }
