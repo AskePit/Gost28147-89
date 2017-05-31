@@ -21,9 +21,9 @@ namespace GOST
 		Crypter();
 		~Crypter();
 
-		void cryptData(byte *dst, const byte *scr, const uint size, const byte *password);
+		void cryptData(byte *dst, const byte *scr, size_t size, const byte *password);
 		void cryptString(byte *dst, const char *scr, const byte *password);
-		void decryptString(char *dst, const byte *scr, uint size, const byte *password);
+		void decryptString(char *dst, const byte *scr, size_t size, const byte *password);
 
 		void useDefaultTable();
 		void setTable(const char *filename); // file with 128 bytes representing SBox table for GOST encryption
@@ -37,8 +37,13 @@ namespace GOST
 		u32 Sync[2];
 		u32 X[8]; // splitted key
 
+		// Gamma
+		u32 N1, N2, N3, N4;
+		void initGamma();
+		void genGamma();
+
 		void simpleGOST(u32 &A, u32 &B);
-		void splitKey(const byte *password);
+		u32 f(u32 word);
 	};
 }
 

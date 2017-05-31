@@ -56,14 +56,22 @@ int main()
 	const clock_t begin_time = clock();
 
 	bool pass = true;
+	size_t size = 0;
 
-	for (int i = 0; i < 1000; ++i)
+	const int TIMES = 1000;
+	for (int i = 0; i < TIMES; ++i)
 	for (const auto test : getTests()) {
 		pass &= run_test(test);
+		size += test.get().size;
 	}
 
 	print_result(pass);
-	std::cout << float(clock() - begin_time) << " ms" << std::endl;
+
+	float ms = float(clock() - begin_time);
+	float speed = (size/1024.f/1024.f) / (ms/1000.f);
+
+	std::cout << ms << " ms" << std::endl;
+	std::cout << speed << " Mb/s" << std::endl;
 
 	//new: 520 ms
 

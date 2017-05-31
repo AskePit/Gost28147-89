@@ -151,37 +151,6 @@ static const u32 defaultSBox[4][256] =
 	}
 };
 
-static const uint cryptRounds[32] =
-{
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    7,6,5,4,3,2,1,0
-};
-
-static const uint C1 = 0x1010104;
-static const uint C2 = 0x1010101;
-
-inline static void bytesToU32(u32 &dst, const byte *scr)
-{
-    dst |= scr[0];
-    dst |= scr[1] << 8;
-    dst |= scr[2] << 16;
-    dst |= scr[3] << 24;
-}
-
-void Crypter::splitKey(const byte *password)
-{
-	wipememory(X, sizeof(X));
-
-	const byte *p = password;
-
-	for (u8 i = 0; i < 8; ++i) {
-		bytesToU32(X[i], p);
-		p += 4;
-	}
-}
-
 // INTERFACE FUNCTIONS
 Crypter::Crypter()
 {
@@ -207,7 +176,7 @@ void Crypter::setTable(const char* filename)
     f.open(filename, fstream::in | fstream::binary);
 
     byte table[128];
-    f.read((char*)table, 128);
+    f.read(reinterpret_cast<char*>(table), 128);
     f.close();
 
     setTable(table);
@@ -217,7 +186,7 @@ void Crypter::setTable(const char* filename)
 // this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
 void Crypter::setTable(const byte *table)
 {
-	u8(*raw_sbox)[16] = (u8(*)[16])table;
+	const u8(*raw_sbox)[16] = reinterpret_cast<const u8(*)[16]>(table);
 
 	for (u8 i = 0, j = 0; i < 4; i++, j += 2) {
 		for (u16 k = 0; k < 256; k++) {
@@ -235,41 +204,70 @@ void Crypter::useDefaultSync()
 
 void Crypter::setSync(const u64 sync)
 {
-	Sync[0] = (u32)sync;
-	Sync[1] = (u32)(sync>>32);
+	Sync[0] = static_cast<u32>(sync);
+	Sync[1] = static_cast<u32>(sync>>32);
 }
 
 void Crypter::cryptString(byte *dst, const char *scr, const byte *password)
 {
-    cryptData(dst, (byte *)scr, strlen(scr), password);
+    cryptData(dst, reinterpret_cast<const byte *>(scr), strlen(scr), password);
 }
 
-void Crypter::decryptString(char *dst, const byte *scr, uint size, const byte *password)
+void Crypter::decryptString(char *dst, const byte *scr, size_t size, const byte *password)
 {
-    cryptData((byte *)dst, (byte *)scr, size, password);
+    cryptData(reinterpret_cast<byte *>(dst), reinterpret_cast<const byte *>(scr), size, password);
     dst[size] = '\0';
 }
 
 // INTERNAL FUNCTIONS
-void Crypter::cryptData(byte *dst, const byte *scr, const uint size, const byte *password)
+static const uint C1 = 0x1010104;
+static const uint C2 = 0x1010101;
+
+void Crypter::initGamma()
+{
+	N1 = Sync[0];
+	N2 = Sync[1];
+
+	simpleGOST(N1, N2);
+
+	N3 = N1;
+	N4 = N2;
+}
+
+void Crypter::genGamma()
+{
+	u32 temp;
+
+	// ADD C1 (mod 2^32 - 1)
+	temp = N4 + C1;
+	if (temp <= N4)
+		++temp;
+
+	// ADD C2 (mod 2^32)
+	N3 += C2;
+
+	N1 = N3;
+	N2 = N4 = temp;
+
+	simpleGOST(N1, N2);
+}
+
+void Crypter::cryptData(byte *dst, const byte *scr, size_t size, const byte *password)
 {
     if(size == 0) {
         return;
     }
 
-    register uint N1 = Sync[0];
-    register uint N2 = Sync[1];
+	memcpy(X, password, 32);
 
-	splitKey(password);
-
-	simpleGOST(N1, N2);
+	initGamma();
 
     uint remain = size%8;
     const byte* scrEnd = scr + size;
 
     register union
     {
-        uint val;
+        u32 val;
         byte blob[4];
     } A, B;
 
@@ -285,6 +283,8 @@ void Crypter::cryptData(byte *dst, const byte *scr, const uint size, const byte 
         G2 = N2 = A.val;
 
 		simpleGOST(G1, G2);
+
+		//genGamma();
 
         memcpy(A.blob, scr, 4);
         scr += 4;
@@ -332,58 +332,33 @@ void Crypter::cryptData(byte *dst, const byte *scr, const uint size, const byte 
         }
     }
 
-	wipememory(X, sizeof(X));
+	wipememory(X, 32);
 }
 
 
-u32 f(u32 word, u32 sBox[4][256])
+u32 Crypter::f(u32 word)
 {
-	return sBox[3][word >> 24] ^
-		   sBox[2][(word & 0x00ff0000) >> 16] ^
-		   sBox[1][(word & 0x0000ff00) >> 8] ^
-		   sBox[0][(word & 0x000000ff)];
+	return SBox[3][word >> 24] ^
+		   SBox[2][static_cast<u8>(word >> 16)] ^
+		   SBox[1][static_cast<u8>(word >> 8)] ^
+		   SBox[0][static_cast<u8>(word)];
 }
+
+static const u8 cryptRounds[32] =
+{
+	0,1,2,3,4,5,6,7,
+	0,1,2,3,4,5,6,7,
+	0,1,2,3,4,5,6,7,
+	7,6,5,4,3,2,1,0
+};
 
 void Crypter::simpleGOST(u32 &A, u32 &B)
 {
 	for (u8 i = 0; i < 31; i += 2) {
-		B ^= f(A + X[cryptRounds[i]], SBox);
-		A ^= f(B + X[cryptRounds[i+1]], SBox);
+		B ^= f(A + X[cryptRounds[i]]);
+		A ^= f(B + X[cryptRounds[i+1]]);
 	}
-	/*
-	B ^= f(A + X[0], SBox);
-	A ^= f(B + X[1], SBox);
-	B ^= f(A + X[2], SBox);
-	A ^= f(B + X[3], SBox);
-	B ^= f(A + X[4], SBox);
-	A ^= f(B + X[5], SBox);
-	B ^= f(A + X[6], SBox);
-	A ^= f(B + X[7], SBox);
-	B ^= f(A + X[0], SBox);
-	A ^= f(B + X[1], SBox);
-	B ^= f(A + X[2], SBox);
-	A ^= f(B + X[3], SBox);
-	B ^= f(A + X[4], SBox);
-	A ^= f(B + X[5], SBox);
-	B ^= f(A + X[6], SBox);
-	A ^= f(B + X[7], SBox);
-	B ^= f(A + X[0], SBox);
-	A ^= f(B + X[1], SBox);
-	B ^= f(A + X[2], SBox);
-	A ^= f(B + X[3], SBox);
-	B ^= f(A + X[4], SBox);
-	A ^= f(B + X[5], SBox);
-	B ^= f(A + X[6], SBox);
-	A ^= f(B + X[7], SBox);
-	B ^= f(A + X[7], SBox);
-	A ^= f(B + X[6], SBox);
-	B ^= f(A + X[5], SBox);
-	A ^= f(B + X[4], SBox);
-	B ^= f(A + X[3], SBox);
-	A ^= f(B + X[2], SBox);
-	B ^= f(A + X[1], SBox);
-	A ^= f(B + X[0], SBox);
-	*/
+
 	std::swap(B, A);
 }
 
