@@ -33,12 +33,12 @@ namespace GOST
 		void setSync(const u64 sync);
 
 	private:
-		u32 SBox[4][256]; // this is an internal [4][256] representation of a standart [8][16] GOST table
+		u8 SBox[8][16];
 		u32 Sync[2];
 		u32 X[8]; // splitted key
 
-		void simpleGOST(u32 &A, u32 &B);
-		u32 f(u32 word);
+		void cryptBlock(u32 &A, u32 &B);
+		void f(u32 &word);
 	};
 }
 
