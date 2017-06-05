@@ -256,13 +256,13 @@ void Crypter::cryptData(byte *dst, const byte *src, size_t size, const byte *pas
 	N3 = Sync[0];
 	N4 = Sync[1];
 
-	simpleGOST(N3, N4);
+	cryptBlock(N3, N4);
 
     while(true) {
 		N2 = N4 = addMod32_1(N4, C1);
 		N1 = N3 = N3 + C2;
 
-		simpleGOST(N1, N2);
+		cryptBlock(N1, N2);
 
         memcpy(&AB, src, 8);
 		src += 8;
@@ -299,7 +299,7 @@ static const u8 cryptRounds[32] =
 	7,6,5,4,3,2,1,0
 };
 
-void Crypter::simpleGOST(u32 &A, u32 &B)
+void Crypter::cryptBlock(u32 &A, u32 &B)
 {
 	for (u8 i = 0; i < 31; i += 2) {
 		B ^= f(A + X[cryptRounds[i]]);

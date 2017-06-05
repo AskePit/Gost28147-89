@@ -37,7 +37,7 @@ namespace GOST
 		u32 Sync[2];
 		u32 X[8]; // splitted key
 
-		void simpleGOST(u32 &A, u32 &B);
+		void cryptBlock(u32 &A, u32 &B);
 		u32 f(u32 word);
 	};
 }
