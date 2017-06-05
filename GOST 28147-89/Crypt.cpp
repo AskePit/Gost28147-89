@@ -238,7 +238,6 @@ void Crypter::cryptData(byte *dst, const byte *src, size_t size, const byte *pas
         return;
     }
 
-	u32 X[8];
 	memcpy(X, password, 32);
 
     size_t remain = size%8;
