@@ -186,12 +186,15 @@ void Crypter::setTable(const char* filename)
 // this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
 void Crypter::setTable(const byte *table)
 {
-	const u8(*raw_sbox)[16] = reinterpret_cast<const u8(*)[16]>(table);
+	const u8(*raw)[16] = reinterpret_cast<const u8(*)[16]>(table);
 
 	for (u8 i = 0, j = 0; i < 4; i++, j += 2) {
 		for (u16 k = 0; k < 256; k++) {
-			SBox[i][k] = (raw_sbox[j][k & 0x0f] | raw_sbox[j + 1][k >> 4] << 4) << (j * 4);
-			SBox[i][k] = SBox[i][k] << 11 | SBox[i][k] >> (32 - 11);
+			u32 &S = SBox[i][k];
+
+			S = raw[j][k & 0x0f] | raw[j + 1][k >> 4] << 4;
+			S <<= j << 2;
+			S = S << 11 | S >> 21;
 		}
 	}
 }
@@ -229,20 +232,13 @@ inline u32 addMod32_1(u32 x, u32 y) {
 	return sum;
 }
 
-void Crypter::genGamma(u32 &N1, u32 &N2, u32 &N3, u32 &N4)
-{
-	N2 = N4 = addMod32_1(N4, C1);
-	N1 = N3 = N3 + C2;
-	
-	simpleGOST(N1, N2);
-}
-
 void Crypter::cryptData(byte *dst, const byte *src, size_t size, const byte *password)
 {
     if(size == 0) {
         return;
     }
 
+	u32 X[8];
 	memcpy(X, password, 32);
 
     size_t remain = size%8;
@@ -264,7 +260,10 @@ void Crypter::cryptData(byte *dst, const byte *src, size_t size, const byte *pas
 	simpleGOST(N3, N4);
 
     while(true) {
-		genGamma(N1, N2, N3, N4);
+		N2 = N4 = addMod32_1(N4, C1);
+		N1 = N3 = N3 + C2;
+
+		simpleGOST(N1, N2);
 
         memcpy(&AB, src, 8);
 		src += 8;
