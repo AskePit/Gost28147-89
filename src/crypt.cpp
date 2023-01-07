@@ -1,20 +1,10 @@
-/*
- * Crypt.cpp
- *
- *  Created on: 27.07.2015
- *      Author: nikolay shalakin
- *
- *  GOST 28147-89 gamming-crypt algorithm implementation
- *
- */
-
-#include "Crypt.h"
+#include "crypt.h"
 #include <fstream>
-#include <cstring>
 
-namespace GOST {;
+namespace gost
+{
 
-static const u32 defaultSBox[4][256] =
+static constexpr u32 defaultSBox[4][256] =
 {
 	{
 		0x00072000, 0x00075000, 0x00074800, 0x00071000, 0x00076800, 0x00074000, 0x00070000, 0x00077000,
@@ -154,43 +144,39 @@ static const u32 defaultSBox[4][256] =
 // INTERFACE FUNCTIONS
 Crypter::Crypter()
 {
-    useDefaultTable();
-    useDefaultSync();
-}
-
-Crypter::~Crypter()
-{
+	useDefaultTable();
+	useDefaultSync();
 }
 
 void Crypter::useDefaultTable()
 {
-    memcpy(SBox, defaultSBox, 4*256*sizeof(u32));
+	memcpy(SBox, defaultSBox, sizeof(u32) * 4 * 256);
 }
 
 // file with 128 bytes representing SBox table for GOST encryption
 void Crypter::setTable(const char* filename)
 {
-    using namespace std;
+	using namespace std;
 
-    fstream f;
-    f.open(filename, fstream::in | fstream::binary);
+	fstream f;
+	f.open(filename, fstream::in | fstream::binary);
 
-    byte table[128];
-    f.read(reinterpret_cast<char*>(table), 128);
-    f.close();
+	byte table[128];
+	f.read(reinterpret_cast<char*>(table), 128);
+	f.close();
 
-    setTable(table);
+	setTable(table);
 }
 
 // 128 bytes representing SBox table for GOST encryption
 // this 128 bytes will be transformed to special 4*256 table (for better algorythm performance)
-void Crypter::setTable(const byte *table)
+void Crypter::setTable(const byte* table)
 {
 	const u8(*raw)[16] = reinterpret_cast<const u8(*)[16]>(table);
 
 	for (u8 i = 0, j = 0; i < 4; i++, j += 2) {
 		for (u16 k = 0; k < 256; k++) {
-			u32 &S = SBox[i][k];
+			u32& S = SBox[i][k];
 
 			S = raw[j][k & 0x0f] | raw[j + 1][k >> 4] << 4;
 			S <<= j << 2;
@@ -208,90 +194,89 @@ void Crypter::useDefaultSync()
 void Crypter::setSync(const u64 sync)
 {
 	Sync[0] = static_cast<u32>(sync);
-	Sync[1] = static_cast<u32>(sync>>32);
+	Sync[1] = static_cast<u32>(sync >> 32);
 }
 
-void Crypter::cryptString(byte *dst, const char *scr, const byte *password)
+void Crypter::cryptString(const char* scr, byte* dst, const byte* password)
 {
-    cryptData(dst, reinterpret_cast<const byte *>(scr), strlen(scr), password);
+	cryptData(reinterpret_cast<const byte*>(scr), dst, strlen(scr), password);
 }
 
-void Crypter::decryptString(char *dst, const byte *scr, size_t size, const byte *password)
+void Crypter::decryptString(const byte* scr, char* dst, size_t size, const byte* password)
 {
-    cryptData(reinterpret_cast<byte *>(dst), reinterpret_cast<const byte *>(scr), size, password);
-    dst[size] = '\0';
+	cryptData(reinterpret_cast<const byte*>(scr), reinterpret_cast<byte*>(dst), size, password);
+	dst[size] = '\0';
 }
 
 // INTERNAL FUNCTIONS
-static const uint C1 = 0x1010104;
-static const uint C2 = 0x1010101;
+constexpr u32 C1 = 0x1010104;
+constexpr u32 C2 = 0x1010101;
 
-inline u32 addMod32_1(u32 x, u32 y) {
+static inline u32 addMod32_1(u32 x, u32 y) {
 	u32 sum = x + y;
 	sum += (sum < x) | (sum < y);
 	return sum;
 }
 
-void Crypter::cryptData(byte *dst, const byte *src, size_t size, const byte *password)
+void Crypter::cryptData(const byte* src, byte* dst, size_t size, const byte* password)
 {
-    if(size == 0) {
-        return;
-    }
+	if (size == 0) {
+		return;
+	}
 
 	memcpy(X, password, 32);
 
-    size_t remain = size%8;
+	size_t remain = size % 8;
 	if (remain == 0) {
 		remain = 8;
 	}
 
-    const byte* lastBytes = src + size - remain + 1;
+	const byte* lastBytes = src + size - remain + 1;
 
-	u32 AB[2];
-	u32 &A = AB[0];
-	u32 &B = AB[1];
+	u32 AB[2]{};
+	u32& A = AB[0];
+	u32& B = AB[1];
 
-    register u32 N1, N2, N3, N4;
+	u32 N1, N2, N3, N4;
 
 	N3 = Sync[0];
 	N4 = Sync[1];
 
 	cryptBlock(N3, N4);
 
-    while(true) {
+	int rem = static_cast<int>(size);
+
+	while (rem > 0) {
 		N2 = N4 = addMod32_1(N4, C1);
 		N1 = N3 = N3 + C2;
 
 		cryptBlock(N1, N2);
 
-        memcpy(&AB, src, 8);
+		memcpy(&AB, src, 8);
+
+		A ^= N1;
+		B ^= N2;
+
+		memcpy(dst, &AB, std::min(8, rem));
+
 		src += 8;
+		dst += 8;
+		rem -= 8;
+	}
 
-        A ^= N1;
-        B ^= N2;
-
-        if(src < lastBytes) {
-            memcpy(dst, &AB, 8);
-            dst += 8;
-        } else {
-            memcpy(dst, &AB, remain);
-            break;
-        }
-    }
-
-	wipememory(X, 32);
+	memwipe(X, 32);
 }
 
 
 u32 Crypter::f(u32 word)
 {
 	return SBox[3][word >> 24] ^
-		   SBox[2][static_cast<u8>(word >> 16)] ^
-		   SBox[1][static_cast<u8>(word >> 8)] ^
-		   SBox[0][static_cast<u8>(word)];
+		SBox[2][static_cast<u8>(word >> 16)] ^
+		SBox[1][static_cast<u8>(word >> 8)] ^
+		SBox[0][static_cast<u8>(word)];
 }
 
-static const u8 cryptRounds[32] =
+static constexpr u8 cryptRounds[32] =
 {
 	0,1,2,3,4,5,6,7,
 	0,1,2,3,4,5,6,7,
@@ -299,14 +284,14 @@ static const u8 cryptRounds[32] =
 	7,6,5,4,3,2,1,0
 };
 
-void Crypter::cryptBlock(u32 &A, u32 &B)
+void Crypter::cryptBlock(u32& A, u32& B)
 {
 	for (u8 i = 0; i < 31; i += 2) {
 		B ^= f(A + X[cryptRounds[i]]);
-		A ^= f(B + X[cryptRounds[i+1]]);
+		A ^= f(B + X[cryptRounds[i + 1]]);
 	}
 
 	std::swap(B, A);
 }
 
-}
+} // namespace gost

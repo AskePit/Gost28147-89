@@ -1,4 +1,7 @@
-#include "tests.h"
+#include "cryptTests.h"
+
+namespace gost::crypt
+{
 
 namespace test01 {
 	static const char *name = "test01";
@@ -2036,3 +2039,5 @@ const std::vector<std::reference_wrapper<const TestCase>> &getTests()
 
 	return tests;
 }
+
+} // namespace gost::crypt
