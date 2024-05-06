@@ -1,6 +1,6 @@
 #pragma once
 
-#include "secureTypes.h"
+#include "secure_types.h"
 
 namespace gost
 {

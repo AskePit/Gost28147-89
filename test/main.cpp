@@ -88,11 +88,11 @@ static bool runSecureTypesTests()
 
 			{
 				Secured<T> secured(std::move(unsecured));
-				dataAddr = as<byte*>(secured.getRaw());
+				dataAddr = reinterpret_cast<byte*>(secured.getRaw());
 				n = secured.sizeInBytes();
 			}
 
-			int res = memcmp(dataAddr, as<byte*>(unsecuredCopy.data()), n);
+			int res = memcmp(dataAddr, reinterpret_cast<byte*>(unsecuredCopy.data()), n);
 			return res != 0;
 		};
 
@@ -125,9 +125,9 @@ static bool runSecureTypesTests()
 		const auto test = []<typename T>(T&& unsecured) -> bool
 		{
 			Secured<T> secured(std::move(unsecured));
-			MasterKey key(std::move(secured));
+			GostMasterKey key(std::move(secured));
 			{
-				MasterKeyGuard guard(key);
+				GostKeyGuard guard(key);
 				guard.get();
 			}
 

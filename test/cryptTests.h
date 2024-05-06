@@ -1,6 +1,6 @@
 #pragma once
 
-#include <secureTypes.h>
+#include "gost_types.h"
 #include <vector>
 
 namespace gost::crypt
