@@ -1,2 +1,6 @@
-.vs/
 out/
+target/
+bin/
+.vs/
+.idea/
+Cargo.lock
