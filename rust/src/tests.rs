@@ -1,5 +1,7 @@
 use super::*;
 
+#[allow(dead_code)]
+
 struct Test<'a> {
     name: &'a str,
     size: usize,
@@ -1490,10 +1492,10 @@ fn crypt_tests() {
         crypted.resize(test.size, 0);
         decrypted.resize(test.size, 0);
 
-        c.crypt_data(test.input, crypted.as_mut_slice(), &test.key);
-        assert_eq!(crypted.as_slice(), test.output);
+        c.crypt_data(test.input, crypted.as_mut_slice(), test.key);
+        assert!(crypted.as_slice() == test.output);
 
-        c.crypt_data(crypted.as_slice(), decrypted.as_mut_slice(), &test.key);
-        assert_eq!(decrypted.as_slice(), test.input);
+        c.crypt_data(crypted.as_slice(), decrypted.as_mut_slice(), test.key);
+        assert!(decrypted.as_slice() == test.input);
     }
 }

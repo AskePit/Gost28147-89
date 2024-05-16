@@ -226,16 +226,7 @@ void Crypter::cryptData(const byte* src, byte* dst, size_t size, const byte* pas
 
 	memcpy(X, password, 32);
 
-	size_t remain = size % 8;
-	if (remain == 0) {
-		remain = 8;
-	}
-
-	const byte* lastBytes = src + size - remain + 1;
-
 	u32 AB[2]{};
-	u32& A = AB[0];
-	u32& B = AB[1];
 
 	u32 N1, N2, N3, N4;
 
@@ -254,8 +245,8 @@ void Crypter::cryptData(const byte* src, byte* dst, size_t size, const byte* pas
 
 		memcpy(&AB, src, 8);
 
-		A ^= N1;
-		B ^= N2;
+		AB[0] ^= N1;
+		AB[1] ^= N2;
 
 		memcpy(dst, &AB, std::min(8, rem));
 
