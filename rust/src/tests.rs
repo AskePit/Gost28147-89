@@ -1,5 +1,5 @@
-use std::time::SystemTime;
 use super::*;
+use std::time::SystemTime;
 
 #[allow(dead_code)]
 
@@ -1485,7 +1485,7 @@ const TESTS: &[Test<'static>] = &[
 fn crypt_tests() {
     let begin_time = SystemTime::now();
     let mut size: usize = 0;
-    const TIMES: usize = 1000;
+    const TIMES: usize = 10000;
 
     for _ in 0..TIMES {
         for test in TESTS {
@@ -1510,7 +1510,10 @@ fn crypt_tests() {
         }
     }
 
-    let ms = SystemTime::now().duration_since(begin_time).unwrap().as_millis();
+    let ms = SystemTime::now()
+        .duration_since(begin_time)
+        .unwrap()
+        .as_millis();
     let speed = (size as f32 / 1024f32 / 1024f32) / (ms as f32 / 1000f32);
 
     println!("  {} ms", ms);
