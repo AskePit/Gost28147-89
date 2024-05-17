@@ -60,7 +60,7 @@ static bool runCryptTests()
 	bool pass = true;
 	size_t size = 0;
 
-	const int TIMES = 1000;
+	const int TIMES = 10000;
 	for (int i = 0; i < TIMES; ++i)
 		for (const auto& test : crypt::getTests()) {
 			pass &= runCryptTest(test);
