@@ -1,4 +1,7 @@
+use std::time::SystemTime;
 use super::*;
+
+#[allow(dead_code)]
 
 struct Test<'a> {
     name: &'a str,
@@ -1480,22 +1483,36 @@ const TESTS: &[Test<'static>] = &[
 
 #[test]
 fn crypt_tests() {
-    for test in TESTS {
-        println!("{}", test.name);
+    let begin_time = SystemTime::now();
+    let mut size: usize = 0;
+    const TIMES: usize = 1000;
 
-        let mut c = Crypter::new();
-        c.set_sync(u64::from_ne_bytes(test.iv));
-        c.set_table_from_bytes(test.table);
+    for _ in 0..TIMES {
+        for test in TESTS {
+            //println!("{}", test.name);
 
-        let mut crypted = vec![];
-        let mut decrypted = vec![];
-        crypted.resize(test.size, 0);
-        decrypted.resize(test.size, 0);
+            let mut c = Crypter::new();
+            c.set_sync(u64::from_ne_bytes(test.iv));
+            c.set_table_from_bytes(test.table);
 
-        c.crypt_data(test.input, crypted.as_mut_slice(), test.key);
-        assert_eq!(crypted.as_slice(), test.output);
+            let mut crypted = vec![];
+            let mut decrypted = vec![];
+            crypted.resize(test.size, 0);
+            decrypted.resize(test.size, 0);
 
-        c.crypt_data(crypted.as_slice(), decrypted.as_mut_slice(), test.key);
-        assert_eq!(decrypted.as_slice(), test.input);
+            c.crypt_data(test.input, crypted.as_mut_slice(), test.key);
+            assert_eq!(crypted.as_slice(), test.output);
+
+            c.crypt_data(crypted.as_slice(), decrypted.as_mut_slice(), test.key);
+            assert_eq!(decrypted.as_slice(), test.input);
+
+            size += test.size;
+        }
     }
+
+    let ms = SystemTime::now().duration_since(begin_time).unwrap().as_millis();
+    let speed = (size as f32 / 1024f32 / 1024f32) / (ms as f32 / 1000f32);
+
+    println!("  {} ms", ms);
+    println!("  {} Mb/s", speed);
 }
