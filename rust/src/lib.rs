@@ -1,6 +1,7 @@
 use std::cmp::min;
-use std::mem::swap;
+use std::mem::{swap, transmute};
 use std::path::Path;
+use std::ptr::copy_nonoverlapping;
 
 pub struct Crypter {
     sbox: [[u32; 256]; 4], // this is an internal [4][256] representation of a standart [8][16] GOST table
@@ -207,7 +208,7 @@ impl Crypter {
         }
 
         self.x
-            .copy_from_slice(&unsafe { std::mem::transmute::<[u8; 32], [u32; 8]>(password) });
+            .copy_from_slice(&unsafe { transmute::<[u8; 32], [u32; 8]>(password) });
 
         let mut ab: [u32; 2] = [0; 2];
 
@@ -229,7 +230,7 @@ impl Crypter {
         while rem > 0 {
             n4 = add_mod32_1(n4, C1);
             n2 = n4;
-            n3 = n3 + C2;
+            n3 = n3.wrapping_add(C2);
             n1 = n3;
 
             self.crypt_block(&mut n1, &mut n2);
@@ -241,14 +242,14 @@ impl Crypter {
                 }
                 r[i] = src_view[i];
             }
-            ab.copy_from_slice(&unsafe{std::mem::transmute::<[u8; 8], [u32; 2]>(r)});
+            ab.copy_from_slice(&unsafe { transmute::<[u8; 8], [u32; 2]>(r) });
 
             ab[0] ^= n1;
             ab[1] ^= n2;
 
             unsafe {
-                std::ptr::copy_nonoverlapping(
-                    std::mem::transmute::<[u32; 2], [u8; 8]>(ab).as_ptr(),
+                copy_nonoverlapping(
+                    transmute::<[u32; 2], [u8; 8]>(ab).as_ptr(),
                     dst_view.as_mut_ptr(),
                     min(8, rem as usize),
                 )
@@ -281,7 +282,7 @@ impl Crypter {
     pub fn set_table_from_file<P: AsRef<Path>>(&mut self, file_path: P) {
         let bytes = std::fs::read(file_path).unwrap();
         let table_raw: [u8; 128] = bytes.try_into().unwrap();
-        let table = unsafe { std::mem::transmute::<[u8; 128], [[u8; 16]; 8]>(table_raw) };
+        let table = unsafe { transmute(table_raw) };
 
         self.set_table_from_bytes(table);
     }
@@ -289,9 +290,9 @@ impl Crypter {
     pub fn set_table_from_bytes(&mut self, table: [[u8; 16]; 8]) {
         let mut i = 0_usize;
         let mut j = 0_usize;
-        let mut k = 0_usize;
 
         while i < 4 {
+            let mut k = 0_usize;
             while k < 256 {
                 let s = &mut self.sbox[i][k];
 
@@ -307,7 +308,7 @@ impl Crypter {
     }
 
     pub fn set_sync(&mut self, sync: u64) {
-        self.sync = unsafe { std::mem::transmute::<u64, [u32; 2]>(sync) };
+        self.sync = unsafe { transmute(sync) };
     }
 
     fn crypt_block<'a>(&self, a: &'a mut u32, b: &'a mut u32) {

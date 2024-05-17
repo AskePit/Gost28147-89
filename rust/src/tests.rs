@@ -1,7 +1,5 @@
 use super::*;
 
-#[allow(dead_code)]
-
 struct Test<'a> {
     name: &'a str,
     size: usize,
@@ -1164,7 +1162,7 @@ const TEST11: Test = Test {
 };
 
 const TEST12: Test = Test {
-    name: "1 u8 test",
+    name: "1 byte test",
     key: [
         0x38, 0x4f, 0x4a, 0x1f, 0x4d, 0x2d, 0xfe, 0x34, 0x1a, 0xf1, 0x21, 0xee, 0xc2, 0xc4, 0xd0,
         0x45, 0x86, 0x41, 0x1e, 0xbb, 0xb0, 0xdf, 0xd0, 0xe0, 0xde, 0x44, 0x5f, 0x84, 0x33, 0x93,
@@ -1483,6 +1481,8 @@ const TESTS: &[Test<'static>] = &[
 #[test]
 fn crypt_tests() {
     for test in TESTS {
+        println!("{}", test.name);
+
         let mut c = Crypter::new();
         c.set_sync(u64::from_ne_bytes(test.iv));
         c.set_table_from_bytes(test.table);
@@ -1493,9 +1493,9 @@ fn crypt_tests() {
         decrypted.resize(test.size, 0);
 
         c.crypt_data(test.input, crypted.as_mut_slice(), test.key);
-        assert!(crypted.as_slice() == test.output);
+        assert_eq!(crypted.as_slice(), test.output);
 
         c.crypt_data(crypted.as_slice(), decrypted.as_mut_slice(), test.key);
-        assert!(decrypted.as_slice() == test.input);
+        assert_eq!(decrypted.as_slice(), test.input);
     }
 }
