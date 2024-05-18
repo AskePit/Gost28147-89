@@ -199,8 +199,7 @@ impl Crypter {
             return;
         }
 
-        unsafe { copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), size) };
-
+        // password -> x
         unsafe {
             copy_nonoverlapping(
                 transmute::<[u8; 32], [u32; 8]>(password).as_ptr(),
@@ -209,52 +208,64 @@ impl Crypter {
             )
         };
 
-        let mut gamma: [u32; 2] = [0; 2];
-        let mut crypt_gamma: [u32; 2] = [0; 2];
+        let full_chunks = size / 8;
+        let last_chunk = size % 8;
 
-        gamma[0] = self.sync[0];
-        gamma[1] = self.sync[1];
+        let mut gamma_dst = &mut dst[..];
+        // gamma init
+        {
+            let gamma = unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
+            gamma[0] = self.sync[0];
+            gamma[1] = self.sync[1];
+            self.crypt_block(gamma);
+            gamma[0] = gamma[0].wrapping_add(C2);
+            gamma[1] = add_mod32_1(gamma[1], C1);
+        };
 
-        self.crypt_block(&mut gamma);
+        // gamma gen
+        let mut gamma_prev: [u32; 2] = *unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
+        gamma_dst = &mut gamma_dst[8..];
 
-        let mut dst = dst;
+        for _ in 1..full_chunks {
+            let gamma_curr = unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
 
-        let full_chunks = src.len() / 8;
-        let last_chunk = src.len() % 8;
+            gamma_curr[0] = gamma_prev[0].wrapping_add(C2);
+            gamma_curr[1] = add_mod32_1(gamma_prev[1], C1);
 
-        for _ in 0..full_chunks {
-            self.round(&mut gamma, &mut crypt_gamma, 8, dst);
-            dst = &mut dst[8..];
+            gamma_dst = &mut gamma_dst[8..];
+
+            gamma_prev[0] = gamma_curr[0];
+            gamma_prev[1] = gamma_curr[1];
+        }
+        if last_chunk > 0 {
+            let gamma_curr = unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
+
+            gamma_curr[0] = gamma_prev[0].wrapping_add(C2);
+            gamma_curr[1] = add_mod32_1(gamma_prev[1], C1);
         }
 
+        // gamma crypt
+        let mut gamma_p = dst.as_mut_ptr() as *mut [u32; 2];
+        for _ in 0..full_chunks {
+            let gamma = unsafe { &mut *gamma_p };
+            self.crypt_block(gamma);
+
+            unsafe{ gamma_p = gamma_p.add(1) };
+        }
         if last_chunk > 0 {
-            self.round(&mut gamma, &mut crypt_gamma, last_chunk, dst);
+            let gamma = unsafe { &mut *gamma_p };
+            self.crypt_block(gamma);
+        }
+
+        // dst = src ^ gamma
+        // or
+        // dst ^= src in our case
+        for i in 0..size {
+            dst[i] ^= src[i];
         }
 
         // security
         self.x.fill(0);
-    }
-
-    #[inline]
-    fn round(
-        &mut self,
-        gamma: &mut [u32; 2],
-        crypt_gamma: &mut [u32; 2],
-        size: usize,
-        dst: &mut [u8],
-    ) {
-        gamma[0] = gamma[0].wrapping_add(C2);
-        gamma[1] = add_mod32_1(gamma[1], C1);
-
-        crypt_gamma[0] = gamma[0];
-        crypt_gamma[1] = gamma[1];
-
-        self.crypt_block(crypt_gamma);
-
-        let gamma = unsafe { *(crypt_gamma as *const u32 as *const [u8; 8]) };
-        for i in 0..size {
-            dst[i] ^= gamma[i];
-        }
     }
 
     pub fn crypt_string(&mut self, src: String, dst: &mut [u8], password: [u8; 32]) {
