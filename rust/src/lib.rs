@@ -211,10 +211,9 @@ impl Crypter {
         let full_chunks = size / 8;
         let last_chunk = size % 8;
 
-        let mut gamma_dst = &mut dst[..];
         // gamma init
         {
-            let gamma = unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
+            let gamma = unsafe { &mut *(dst.as_mut_ptr() as *mut [u32; 2]) };
             gamma[0] = self.sync[0];
             gamma[1] = self.sync[1];
             self.crypt_block(gamma);
@@ -223,22 +222,23 @@ impl Crypter {
         };
 
         // gamma gen
-        let mut gamma_prev: [u32; 2] = *unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
-        gamma_dst = &mut gamma_dst[8..];
+        let mut gamma_prev: [u32; 2] = *unsafe { &mut *(dst.as_mut_ptr() as *mut [u32; 2]) };
+        let mut gamma_p = dst.as_mut_ptr() as *mut [u32; 2];
+        unsafe { gamma_p = gamma_p.add(1) };
 
         for _ in 1..full_chunks {
-            let gamma_curr = unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
+            let gamma = unsafe { &mut *gamma_p };
 
-            gamma_curr[0] = gamma_prev[0].wrapping_add(C2);
-            gamma_curr[1] = add_mod32_1(gamma_prev[1], C1);
+            gamma[0] = gamma_prev[0].wrapping_add(C2);
+            gamma[1] = add_mod32_1(gamma_prev[1], C1);
 
-            gamma_dst = &mut gamma_dst[8..];
+            unsafe { gamma_p = gamma_p.add(1) };
 
-            gamma_prev[0] = gamma_curr[0];
-            gamma_prev[1] = gamma_curr[1];
+            gamma_prev[0] = gamma[0];
+            gamma_prev[1] = gamma[1];
         }
         if last_chunk > 0 {
-            let gamma_curr = unsafe { &mut *(gamma_dst.as_mut_ptr() as *mut [u32; 2]) };
+            let gamma_curr = unsafe { &mut *gamma_p };
 
             gamma_curr[0] = gamma_prev[0].wrapping_add(C2);
             gamma_curr[1] = add_mod32_1(gamma_prev[1], C1);
@@ -247,14 +247,12 @@ impl Crypter {
         // gamma crypt
         let mut gamma_p = dst.as_mut_ptr() as *mut [u32; 2];
         for _ in 0..full_chunks {
-            let gamma = unsafe { &mut *gamma_p };
-            self.crypt_block(gamma);
+            self.crypt_block(unsafe { &mut *gamma_p });
 
-            unsafe{ gamma_p = gamma_p.add(1) };
+            unsafe { gamma_p = gamma_p.add(1) };
         }
         if last_chunk > 0 {
-            let gamma = unsafe { &mut *gamma_p };
-            self.crypt_block(gamma);
+            self.crypt_block(unsafe { &mut *gamma_p });
         }
 
         // dst = src ^ gamma
