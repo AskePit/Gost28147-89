@@ -1,4 +1,4 @@
-use std::mem::{swap, transmute};
+use std::mem::transmute;
 use std::path::Path;
 use std::ptr::copy_nonoverlapping;
 
@@ -169,19 +169,13 @@ const DEFAULT_SBOX: [[u32; 256]; 4] = [
 
 const DEFAULT_SYNC: [u32; 2] = [0x40FD452C, 0xF86EDCDB];
 
-const CRYPT_ROUNDS: [u8; 32] = [
-    0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 7, 6, 5, 4, 3, 2, 1, 0,
-];
-
 const C1: u32 = 0x1010104;
 const C2: u32 = 0x1010101;
 
+#[inline(always)]
 fn add_mod32_1(x: u32, y: u32) -> u32 {
-    let (mut sum, over) = x.overflowing_add(y);
-    if over {
-        sum += 1
-    }
-    sum
+    let (sum, over) = x.overflowing_add(y);
+    sum + (over as u32)
 }
 
 impl Default for Crypter {
@@ -205,6 +199,8 @@ impl Crypter {
             return;
         }
 
+        unsafe { copy_nonoverlapping(src.as_ptr(), dst.as_mut_ptr(), size) };
+
         unsafe {
             copy_nonoverlapping(
                 transmute::<[u8; 32], [u32; 8]>(password).as_ptr(),
@@ -213,65 +209,52 @@ impl Crypter {
             )
         };
 
-        let mut ab: [u32; 2] = [0; 2];
-        let mut n: [u32; 4] = [0; 4];
+        let mut gamma: [u32; 2] = [0; 2];
+        let mut crypt_gamma: [u32; 2] = [0; 2];
 
-        n[2] = self.sync[0];
-        n[3] = self.sync[1];
+        gamma[0] = self.sync[0];
+        gamma[1] = self.sync[1];
 
-        let (n2, n3) = n.split_at_mut(3);
-        self.crypt_block(&mut n2[2], &mut n3[0]);
+        self.crypt_block(&mut gamma);
 
-        let mut src = src;
         let mut dst = dst;
 
         let full_chunks = src.len() / 8;
         let last_chunk = src.len() % 8;
 
         for _ in 0..full_chunks {
-            self.round(&mut n, &mut ab, 8, src, dst);
-
-            src = &src[8..];
+            self.round(&mut gamma, &mut crypt_gamma, 8, dst);
             dst = &mut dst[8..];
         }
 
         if last_chunk > 0 {
-            self.round(&mut n, &mut ab, last_chunk, src, dst);
+            self.round(&mut gamma, &mut crypt_gamma, last_chunk, dst);
         }
 
         // security
         self.x.fill(0);
     }
 
-    #[inline(always)]
+    #[inline]
     fn round(
         &mut self,
-        n: &mut [u32; 4],
-        ab: &mut [u32; 2],
+        gamma: &mut [u32; 2],
+        crypt_gamma: &mut [u32; 2],
         size: usize,
-        src: &[u8],
         dst: &mut [u8],
     ) {
-        n[3] = add_mod32_1(n[3], C1);
-        n[1] = n[3];
-        n[2] = n[2].wrapping_add(C2);
-        n[0] = n[2];
+        gamma[0] = gamma[0].wrapping_add(C2);
+        gamma[1] = add_mod32_1(gamma[1], C1);
 
-        let (n0, n1) = n.split_at_mut(1);
-        self.crypt_block(&mut n0[0], &mut n1[0]);
+        crypt_gamma[0] = gamma[0];
+        crypt_gamma[1] = gamma[1];
 
-        unsafe { copy_nonoverlapping(src.as_ptr(), ab.as_mut_ptr() as *mut u8, size) };
+        self.crypt_block(crypt_gamma);
 
-        ab[0] ^= n[0];
-        ab[1] ^= n[1];
-
-        unsafe {
-            copy_nonoverlapping(
-                transmute::<[u32; 2], [u8; 8]>(*ab).as_ptr(), // definitely faster than `as *const u8`
-                dst.as_mut_ptr(),
-                size,
-            )
-        };
+        let gamma = unsafe { *(crypt_gamma as *const u32 as *const [u8; 8]) };
+        for i in 0..size {
+            dst[i] ^= gamma[i];
+        }
     }
 
     pub fn crypt_string(&mut self, src: String, dst: &mut [u8], password: [u8; 32]) {
@@ -279,8 +262,7 @@ impl Crypter {
     }
 
     pub fn decrypt_string(&mut self, src: &[u8], password: [u8; 32]) -> Option<String> {
-        let mut dst: Vec<u8> = vec![];
-        dst.resize(src.len(), 0);
+        let mut dst: Vec<u8> = vec![0; src.len()];
 
         self.crypt_data(src, dst.as_mut_slice(), password);
 
@@ -290,7 +272,7 @@ impl Crypter {
     pub fn set_table_from_file<P: AsRef<Path>>(&mut self, file_path: P) {
         let bytes = std::fs::read(file_path).unwrap();
         let table_raw: [u8; 128] = bytes.try_into().unwrap();
-        let table = unsafe { transmute(table_raw) };
+        let table = unsafe { transmute::<[u8; 128], [[u8; 16]; 8]>(table_raw) };
 
         self.set_table_from_bytes(table);
     }
@@ -309,22 +291,29 @@ impl Crypter {
     }
 
     pub fn set_sync(&mut self, sync: u64) {
-        self.sync = unsafe { transmute(sync) };
+        self.sync = unsafe { transmute::<u64, [u32; 2]>(sync) };
     }
 
     #[inline]
-    fn crypt_block<'a>(&self, a: &'a mut u32, b: &'a mut u32) {
-        for i in (0..31).step_by(2) {
-            *b ^= self.f(a.wrapping_add(self.x[CRYPT_ROUNDS[i as usize] as usize]));
-            *a ^= self.f(b.wrapping_add(self.x[CRYPT_ROUNDS[(i + 1) as usize] as usize]));
+    fn crypt_block(&self, ab: &mut [u32; 2]) {
+        for _ in 0..3 {
+            for i in 0..4 {
+                ab[1] ^= self.f(ab[0].wrapping_add(self.x[i * 2]));
+                ab[0] ^= self.f(ab[1].wrapping_add(self.x[i * 2 + 1]));
+            }
         }
 
-        swap(b, a);
+        for i in (1..8).rev().step_by(2) {
+            ab[1] ^= self.f(ab[0].wrapping_add(self.x[i]));
+            ab[0] ^= self.f(ab[1].wrapping_add(self.x[i - 1]));
+        }
+
+        ab.swap(0, 1);
     }
 
-    #[inline(always)]
+    #[inline]
     fn f(&self, word: u32) -> u32 {
-        let bytes = unsafe { &*(&word as *const u32 as *const [u8; 4]) };
+        let bytes: [u8; 4] = word.to_ne_bytes();
         self.sbox[3][bytes[3] as usize]
             ^ self.sbox[2][bytes[2] as usize]
             ^ self.sbox[1][bytes[1] as usize]
