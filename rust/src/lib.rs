@@ -260,7 +260,7 @@ impl Crypter {
         let (n0, n1) = n.split_at_mut(1);
         self.crypt_block(&mut n0[0], &mut n1[0]);
 
-        unsafe { copy_nonoverlapping(src.as_ptr() as *const u32, ab.as_mut_ptr(), size) };
+        unsafe { copy_nonoverlapping(src.as_ptr(), ab.as_mut_ptr() as *mut u8, size) };
 
         ab[0] ^= n[0];
         ab[1] ^= n[1];
