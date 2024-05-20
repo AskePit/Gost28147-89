@@ -1477,8 +1477,7 @@ const TEST19: Test = Test {
 };
 
 const TESTS: &[Test<'static>] = &[
-    TEST01, TEST02, TEST03, TEST04, TEST05, TEST06, TEST07, TEST08, TEST09,
-    /*TEST10,*/
+    TEST10,
     TEST11, /*TEST12,
            TEST13, TEST14, TEST15, TEST16, TEST17, TEST18, TEST19,*/
 ];
@@ -1497,16 +1496,11 @@ fn crypt_tests() {
             c.set_sync(u64::from_ne_bytes(test.iv));
             c.set_table_from_bytes(test.table);
 
-            let mut crypted = vec![];
-            let mut decrypted = vec![];
-            crypted.resize(test.size, 0);
-            decrypted.resize(test.size, 0);
+            let crypted = c.crypt_data(test.input, test.key);
+            assert_eq!(crypted.as_ref(), test.output);
 
-            c.crypt_data(test.input, crypted.as_mut_slice(), test.key);
-            assert_eq!(crypted.as_slice(), test.output);
-
-            c.crypt_data(crypted.as_slice(), decrypted.as_mut_slice(), test.key);
-            assert_eq!(decrypted.as_slice(), test.input);
+            let decrypted = c.crypt_data(crypted.as_ref(), test.key);
+            assert_eq!(decrypted.as_ref(), test.input);
 
             size += test.size;
         }

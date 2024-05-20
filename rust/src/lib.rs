@@ -193,10 +193,16 @@ impl Crypter {
         Crypter { ..Self::default() }
     }
 
-    pub fn crypt_data(&mut self, src: &[u8], dst: &mut [u8], password: [u8; 32]) {
+    pub fn crypt_data(&mut self, src: &[u8], password: [u8; 32]) -> Box<[u8]> {
         let size = src.len();
+        let full_chunks = size / 8;
+        let last_chunk = size % 8;
+        let chunks = full_chunks + (last_chunk > 0) as usize;
+
+        let mut dst: Vec<u8> = vec![0; chunks * 8];
+
         if size == 0 {
-            return;
+            return dst.into_boxed_slice();
         }
 
         // password -> x
@@ -207,9 +213,6 @@ impl Crypter {
                 8,
             )
         };
-
-        let full_chunks = size / 8;
-        let last_chunk = size % 8;
 
         // gamma init
         {
@@ -264,17 +267,19 @@ impl Crypter {
 
         // security
         self.x.fill(0);
+
+        if last_chunk > 0 {
+            dst.resize(size, 0);
+        }
+        dst.into_boxed_slice()
     }
 
-    pub fn crypt_string(&mut self, src: String, dst: &mut [u8], password: [u8; 32]) {
-        self.crypt_data(src.as_bytes(), dst, password);
+    pub fn crypt_string(&mut self, src: String, password: [u8; 32]) -> Box<[u8]> {
+        self.crypt_data(src.as_bytes(), password)
     }
 
     pub fn decrypt_string(&mut self, src: &[u8], password: [u8; 32]) -> Option<String> {
-        let mut dst: Vec<u8> = vec![0; src.len()];
-
-        self.crypt_data(src, dst.as_mut_slice(), password);
-
+        let dst = self.crypt_data(src, password).to_vec();
         String::from_utf8(dst).ok()
     }
 
