@@ -173,8 +173,13 @@ const C1: u32 = 0x1010104;
 const C2: u32 = 0x1010101;
 
 #[inline(always)]
-fn add_mod32_1(x: u32, y: u32) -> u32 {
-    let (sum, over) = x.overflowing_add(y);
+fn add_mod32_0_c2(x: u32) -> u32 {
+    x.wrapping_add(C2)
+}
+
+#[inline(always)]
+fn add_mod32_1_c1(x: u32) -> u32 {
+    let (sum, over) = x.overflowing_add(C1);
     sum + (over as u32)
 }
 
@@ -214,36 +219,38 @@ impl Crypter {
             )
         };
 
+        let dst_p = dst.as_mut_ptr() as *mut [u32; 2];
+
         // gamma init
         {
-            let gamma = unsafe { &mut *(dst.as_mut_ptr() as *mut [u32; 2]) };
+            let gamma = unsafe { &mut *dst_p };
             gamma[0] = self.sync[0];
             gamma[1] = self.sync[1];
             self.crypt_block(gamma);
-            gamma[0] = gamma[0].wrapping_add(C2);
-            gamma[1] = add_mod32_1(gamma[1], C1);
+            gamma[0] = add_mod32_0_c2(gamma[0]);
+            gamma[1] = add_mod32_1_c1(gamma[1]);
         };
 
         // gamma gen
-        let mut gamma_prev_p = dst.as_mut_ptr() as *mut [u32; 2];
-        let mut gamma_p = gamma_prev_p;
-        unsafe { gamma_p = gamma_p.add(1) };
+        let mut gamma_prev_p = dst_p;
+        let mut gamma_curr_p = dst_p;
+        unsafe { gamma_curr_p = gamma_curr_p.add(1) };
 
         for _ in 1..chunks {
             unsafe {
-                let gamma = &mut *gamma_p;
+                let gamma_curr = &mut *gamma_curr_p;
                 let gamma_prev = &mut *gamma_prev_p;
 
-                gamma[0] = gamma_prev[0].wrapping_add(C2);
-                gamma[1] = add_mod32_1(gamma_prev[1], C1);
+                gamma_curr[0] = add_mod32_0_c2(gamma_prev[0]);
+                gamma_curr[1] = add_mod32_1_c1(gamma_prev[1]);
 
-                gamma_p = gamma_p.add(1);
+                gamma_curr_p = gamma_curr_p.add(1);
                 gamma_prev_p = gamma_prev_p.add(1);
             }
         }
 
         // gamma crypt
-        let mut gamma_p = dst.as_mut_ptr() as *mut [u32; 2];
+        let mut gamma_p = dst_p;
         for _ in 0..chunks {
             unsafe {
                 self.crypt_block(&mut *gamma_p);
