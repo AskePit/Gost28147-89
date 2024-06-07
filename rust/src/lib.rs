@@ -1,7 +1,9 @@
+use std::alloc::Layout;
 use std::arch::x86_64::{__m256i, _mm256_loadu_si256, _mm256_xor_si256};
 use std::mem::transmute;
 use std::path::Path;
 use std::ptr::copy_nonoverlapping;
+use std::{alloc, ptr};
 
 pub struct Crypter {
     sbox: [[u32; 256]; 4], // this is an internal [4][256] representation of a standart [8][16] GOST table
@@ -184,6 +186,32 @@ fn add_mod32_1_c1(x: u32) -> u32 {
     sum + (over as u32)
 }
 
+fn alloc_box_buffer(len: usize) -> Box<[u8]> {
+    if len == 0 {
+        return <Box<[u8]>>::default();
+    }
+    let layout = Layout::array::<u8>(len).unwrap();
+    let ptr = unsafe { alloc::alloc_zeroed(layout) };
+    let slice_ptr = core::ptr::slice_from_raw_parts_mut(ptr, len);
+    unsafe { Box::from_raw(slice_ptr) }
+}
+
+fn shrink_box_buffer(data: Box<[u8]>, shrinked_size: usize) -> Box<[u8]> {
+    let ptr = Box::into_raw(data);
+
+    let size = unsafe { (*ptr).len() };
+    assert!(shrinked_size < size);
+
+    let ptr = ptr as *mut u8;
+
+    unsafe {
+        let tail = ptr::slice_from_raw_parts_mut(ptr.add(shrinked_size), size - shrinked_size);
+        ptr::drop_in_place(tail);
+    }
+    let slice_ptr = core::ptr::slice_from_raw_parts_mut(ptr, shrinked_size);
+    unsafe { Box::from_raw(slice_ptr) }
+}
+
 impl Default for Crypter {
     fn default() -> Self {
         Crypter {
@@ -205,10 +233,10 @@ impl Crypter {
         let last_chunk = size % 8;
         let chunks = full_chunks + (last_chunk > 0) as usize;
 
-        let mut dst: Vec<u8> = vec![0; chunks * 8];
+        let mut dst = alloc_box_buffer(chunks * 8);
 
         if size == 0 {
-            return dst.into_boxed_slice();
+            return dst;
         }
 
         // password -> x
@@ -267,10 +295,8 @@ impl Crypter {
 
         for _ in 0..size / 32 {
             unsafe {
-                *dst_simd = _mm256_xor_si256(
-                    _mm256_loadu_si256(dst_simd),
-                    _mm256_loadu_si256(src_simd)
-                );
+                *dst_simd =
+                    _mm256_xor_si256(_mm256_loadu_si256(dst_simd), _mm256_loadu_si256(src_simd));
                 src_simd = src_simd.add(1);
                 dst_simd = dst_simd.add(1);
             }
@@ -284,9 +310,9 @@ impl Crypter {
         self.x.fill(0);
 
         if last_chunk > 0 {
-            dst.resize(size, 0);
+            dst = shrink_box_buffer(dst, size);
         }
-        dst.into_boxed_slice()
+        dst
     }
 
     pub fn crypt_string(&mut self, src: String, password: [u8; 32]) -> Box<[u8]> {
