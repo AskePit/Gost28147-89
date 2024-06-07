@@ -1,3 +1,4 @@
+use std::arch::x86_64::{__m256i, _mm256_loadu_si256, _mm256_xor_si256};
 use std::mem::transmute;
 use std::path::Path;
 use std::ptr::copy_nonoverlapping;
@@ -261,7 +262,21 @@ impl Crypter {
         // dst = src ^ gamma
         // or
         // dst ^= src in our case
-        for i in 0..size {
+        let mut src_simd = src.as_ptr() as *const __m256i;
+        let mut dst_simd = dst_p as *mut __m256i;
+
+        for _ in 0..size / 32 {
+            unsafe {
+                *dst_simd = _mm256_xor_si256(
+                    _mm256_loadu_si256(dst_simd),
+                    _mm256_loadu_si256(src_simd)
+                );
+                src_simd = src_simd.add(1);
+                dst_simd = dst_simd.add(1);
+            }
+        }
+
+        for i in (size - size % 32)..size {
             dst[i] ^= src[i];
         }
 
