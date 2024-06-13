@@ -260,29 +260,26 @@ impl Crypter {
         };
 
         // gamma gen
-        let mut gamma_prev_p = dst_p;
-        let mut gamma_curr_p = dst_p;
-        unsafe { gamma_curr_p = gamma_curr_p.add(1) };
+        let mut gamma_prev = dst_p;
+        let mut gamma_curr = dst_p;
+        unsafe { gamma_curr = gamma_curr.add(1) };
 
         for _ in 1..chunks {
             unsafe {
-                let gamma_curr = &mut *gamma_curr_p;
-                let gamma_prev = &mut *gamma_prev_p;
+                (*gamma_curr)[0] = add_mod32_0_c2((*gamma_prev)[0]);
+                (*gamma_curr)[1] = add_mod32_1_c1((*gamma_prev)[1]);
 
-                gamma_curr[0] = add_mod32_0_c2(gamma_prev[0]);
-                gamma_curr[1] = add_mod32_1_c1(gamma_prev[1]);
-
-                gamma_curr_p = gamma_curr_p.add(1);
-                gamma_prev_p = gamma_prev_p.add(1);
+                gamma_curr = gamma_curr.add(1);
+                gamma_prev = gamma_prev.add(1);
             }
         }
 
         // gamma crypt
-        let mut gamma_p = dst_p;
+        let mut gamma = dst_p;
         for _ in 0..chunks {
             unsafe {
-                self.crypt_block(&mut *gamma_p);
-                gamma_p = gamma_p.add(1);
+                self.crypt_block(&mut *gamma);
+                gamma = gamma.add(1);
             }
         }
 
