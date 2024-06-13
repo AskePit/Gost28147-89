@@ -267,10 +267,8 @@ impl Crypter {
 
         for _ in 0..size / 32 {
             unsafe {
-                *dst_simd = _mm256_xor_si256(
-                    _mm256_loadu_si256(dst_simd),
-                    _mm256_loadu_si256(src_simd)
-                );
+                *dst_simd =
+                    _mm256_xor_si256(_mm256_loadu_si256(dst_simd), _mm256_loadu_si256(src_simd));
                 src_simd = src_simd.add(1);
                 dst_simd = dst_simd.add(1);
             }
